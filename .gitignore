@@ -1,0 +1,11 @@
+# Verified upstream source archives
+sources/*
+!sources/.gitkeep
+
+# Extracted sources, build trees, and rootfs staging
+work/*
+!work/.gitkeep
+
+# Final build artifacts
+out/*
+!out/.gitkeep
