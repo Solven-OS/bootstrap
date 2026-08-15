@@ -1,0 +1,113 @@
+#!/System/Commands/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+registry=/State/System/Volumes/registry
+
+usage() {
+    printf 'usage: solpath --resolve DRIVE:/PATH\n' >&2
+    printf '       solpath --display /KERNEL/VFS/PATH\n' >&2
+    exit 2
+}
+
+[ "$#" -eq 2 ] || usage
+mode="$1"
+input="$2"
+
+if [ ! -r "$registry" ]; then
+    printf 'solpath: volume registry is unavailable\n' >&2
+    exit 1
+fi
+
+case "$mode" in
+    --resolve)
+        case "$input" in
+            [A-Z]:)
+                drive="${input%:}"
+                requested=/
+                ;;
+            [A-Z]:/*)
+                drive="${input%%:*}"
+                requested="${input#*:}"
+                ;;
+            *)
+                printf 'solpath: expected a path such as A:/Users/root\n' >&2
+                exit 1
+                ;;
+        esac
+
+        case "$requested/" in
+            */../*)
+                printf 'solpath: parent segments are not allowed in drive paths\n' >&2
+                exit 1
+                ;;
+        esac
+
+        while IFS='|' read -r letter volume_uuid volume_name mountpoint; do
+            case "$letter" in
+                ''|'#'*) continue ;;
+            esac
+
+            if [ "$letter" = "$drive" ]; then
+                if [ "$mountpoint" = / ]; then
+                    printf '%s\n' "$requested"
+                else
+                    printf '%s%s\n' "${mountpoint%/}" "$requested"
+                fi
+                exit 0
+            fi
+        done < "$registry"
+
+        printf 'solpath: drive %s: is not assigned\n' "$drive" >&2
+        exit 1
+        ;;
+    --display)
+        case "$input" in
+            /*) ;;
+            *)
+                printf 'solpath: expected an absolute kernel/VFS path\n' >&2
+                exit 1
+                ;;
+        esac
+
+        best_letter=
+        best_mount=
+        best_length=0
+
+        while IFS='|' read -r letter volume_uuid volume_name mountpoint; do
+            case "$letter" in
+                ''|'#'*) continue ;;
+            esac
+
+            matches=
+            if [ "$mountpoint" = / ]; then
+                matches=1
+            else
+                case "$input" in
+                    "$mountpoint"|"$mountpoint"/*) matches=1 ;;
+                esac
+            fi
+
+            if [ -n "$matches" ] && [ "${#mountpoint}" -gt "$best_length" ]; then
+                best_letter="$letter"
+                best_mount="$mountpoint"
+                best_length="${#mountpoint}"
+            fi
+        done < "$registry"
+
+        if [ -z "$best_letter" ]; then
+            printf 'solpath: no volume contains %s\n' "$input" >&2
+            exit 1
+        fi
+
+        if [ "$best_mount" = / ]; then
+            printf '%s:%s\n' "$best_letter" "$input"
+        elif [ "$input" = "$best_mount" ]; then
+            printf '%s:/\n' "$best_letter"
+        else
+            printf '%s:%s\n' "$best_letter" "${input#"$best_mount"}"
+        fi
+        ;;
+    *)
+        usage
+        ;;
+esac

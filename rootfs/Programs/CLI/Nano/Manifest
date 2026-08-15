@@ -1,0 +1,6 @@
+Name: GNU nano
+Version: 9.2
+Type: CLI
+Executable: Executable/nano
+Terminal library: ncursesw 6.6 (statically linked)
+Terminal data: Resources/terminfo

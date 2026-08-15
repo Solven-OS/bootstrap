@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/System/Commands/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
+
+resolv_conf=/Runtime/System/Network/resolv.conf
 
 case "$1" in
     deconfig)
@@ -14,16 +16,16 @@ case "$1" in
         ip addr add "$address" dev "$interface"
         ip link set dev "$interface" up
 
-        ip route del default 2>/dev/null || true
+        ip route del default 2>/dev/null || :
         for gateway in $router; do
             ip route add default via "$gateway" dev "$interface"
             break
         done
 
-        : > /etc/resolv.conf
-        [ -n "$domain" ] && printf 'search %s\n' "$domain" >> /etc/resolv.conf
+        : > "$resolv_conf"
+        [ -n "$domain" ] && printf 'search %s\n' "$domain" >> "$resolv_conf"
         for server in $dns; do
-            printf 'nameserver %s\n' "$server" >> /etc/resolv.conf
+            printf 'nameserver %s\n' "$server" >> "$resolv_conf"
         done
         ;;
 esac

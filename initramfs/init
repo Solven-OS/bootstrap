@@ -1,0 +1,60 @@
+#!/bootstrap/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+PATH=/bootstrap
+export PATH
+
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || :
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+
+root_uuid=
+while IFS='|' read -r letter volume_uuid volume_name mountpoint; do
+    case "$letter" in
+        A)
+            root_uuid="$volume_uuid"
+            break
+            ;;
+    esac
+done < /volumes.conf
+
+if [ -z "$root_uuid" ]; then
+    printf 'Solven boot error: A: is missing from the volume registry.\n'
+    exec sh
+fi
+
+root_device=
+for attempt in 1 2 3 4 5; do
+    for device in /dev/vd* /dev/sd*; do
+        metadata="$(blkid "$device" 2>/dev/null)"
+        case "$metadata" in
+            *" UUID=\"$root_uuid\""*) ;;
+            *) continue ;;
+        esac
+        case "$metadata" in
+            *' TYPE="ext4"'*)
+                root_device="$device"
+                break
+                ;;
+        esac
+    done
+
+    [ -n "$root_device" ] && break
+    sleep 1
+done
+
+if [ -z "$root_device" ]; then
+    printf 'Solven boot error: root volume %s was not found.\n' "$root_uuid"
+    exec sh
+fi
+
+if ! mount -t ext4 -o rw "$root_device" /newroot; then
+    printf 'Solven boot error: could not mount %s.\n' "$root_device"
+    exec sh
+fi
+
+mount -o move /dev /newroot/dev
+mount -o move /proc /newroot/proc
+mount -o move /sys /newroot/sys
+
+exec switch_root /newroot /System/Core/Init/init

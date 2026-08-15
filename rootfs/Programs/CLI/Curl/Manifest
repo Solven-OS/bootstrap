@@ -1,0 +1,6 @@
+Name: curl
+Version: 8.21.0
+Type: CLI
+Executable: Executable/curl
+TLS: Mbed TLS 3.6.7 (statically linked)
+Trust: /System/Trust/CA/ca-certificates.crt
