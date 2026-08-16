@@ -1,0 +1,22 @@
+#!/System/Commands/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+ip link set lo up || printf 'Warning: failed to bring up loopback.\n'
+
+printf 'Configuring network...\n'
+if ip link set eth0 up && udhcpc -i eth0 -q -n -t 5 -T 2; then
+    printf '\nNetwork addresses:\n'
+    ip addr
+    printf '\nDefault route:\n'
+    ip route show default
+    printf '\nDNS servers:\n'
+    if [ -s /Runtime/System/Network/resolv.conf ]; then
+        cat /Runtime/System/Network/resolv.conf
+    else
+        printf 'No DNS servers received\n'
+    fi
+    exit 0
+fi
+
+printf 'Network configuration failed; continuing without networking.\n'
+exit 1

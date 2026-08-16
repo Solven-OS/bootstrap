@@ -45,6 +45,11 @@ NANO_ARCHIVE="nano-${NANO_VERSION}.tar.xz"
 NANO_URL="https://ftp.gnu.org/gnu/nano/${NANO_ARCHIVE}"
 NANO_SHA256="05ecb99247b782e8a5b3a25ed4101dd034b0236902f7449bc9795b717642f7e9"
 
+STEWARD_COMMIT="ecb20b2415f47aed7c204cb375aa8c962db26e2d"
+STEWARD_ARCHIVE="steward-${STEWARD_COMMIT}.tar.gz"
+STEWARD_URL="https://github.com/Solven-OS/steward/releases/download/v0.1.0/${STEWARD_ARCHIVE}"
+STEWARD_SHA256="32085f86813dc4fc3564c92a1681e8fcec89d3a48211d45651136cb44ffc9567"
+
 ROOTFS_SIZE_MIB=128
 SOURCE_DATE_EPOCH=1
 export SOURCE_DATE_EPOCH
@@ -62,7 +67,7 @@ fi
 
 required_commands=(
     ar awk bash basename bc bison bzip2 chmod cp cpio curl cut debugfs dirname
-    e2fsck expr file find flex gcc grep gzip install ld ln make mkdir mke2fs mv nm
+    e2fsck expr file find flex g++ gcc grep gzip install ld ln make mkdir mke2fs mv nm
     objdump perl ranlib readelf rm sed sha256sum sort stat strip tar touch tr
     truncate uname wc xz
 )
@@ -133,6 +138,7 @@ download_and_verify "$CURL_URL" "$SOURCES_DIR/$CURL_ARCHIVE" "$CURL_SHA256"
 download_and_verify "$CA_BUNDLE_URL" "$SOURCES_DIR/$CA_BUNDLE_ARCHIVE" "$CA_BUNDLE_SHA256"
 download_and_verify "$NCURSES_URL" "$SOURCES_DIR/$NCURSES_ARCHIVE" "$NCURSES_SHA256"
 download_and_verify "$NANO_URL" "$SOURCES_DIR/$NANO_ARCHIVE" "$NANO_SHA256"
+download_and_verify "$STEWARD_URL" "$SOURCES_DIR/$STEWARD_ARCHIVE" "$STEWARD_SHA256"
 
 LINUX_SOURCE="$WORK_DIR/linux-$LINUX_VERSION"
 LINUX_BUILD="$WORK_DIR/linux-build"
@@ -147,6 +153,8 @@ NCURSES_BUILD="$WORK_DIR/ncurses-build"
 NCURSES_PREFIX="$WORK_DIR/ncurses-install"
 NANO_SOURCE="$WORK_DIR/nano-$NANO_VERSION"
 NANO_BUILD="$WORK_DIR/nano-build"
+STEWARD_SOURCE="$WORK_DIR/steward-$STEWARD_COMMIT"
+STEWARD_BUILD="$WORK_DIR/steward-build"
 EMPTY_PKGCONFIG="$WORK_DIR/empty-pkgconfig"
 ROOTFS_STAGE="$WORK_DIR/rootfs"
 ROOTFS_TAR="$WORK_DIR/rootfs.tar"
@@ -158,7 +166,8 @@ rm -rf \
     "$BUSYBOX_SOURCE" "$BUSYBOX_BUILD" "$INIT_BUSYBOX_BUILD" \
     "$MBEDTLS_SOURCE" "$MBEDTLS_PREFIX" "$CURL_SOURCE" \
     "$NCURSES_SOURCE" "$NCURSES_BUILD" "$NCURSES_PREFIX" \
-    "$NANO_SOURCE" "$NANO_BUILD" "$EMPTY_PKGCONFIG" \
+    "$NANO_SOURCE" "$NANO_BUILD" "$STEWARD_SOURCE" "$STEWARD_BUILD" \
+    "$EMPTY_PKGCONFIG" \
     "$ROOTFS_STAGE" "$INITRAMFS_STAGE"
 rm -f "$ROOTFS_TAR" "${ROOTFS_IMAGE}.part" \
     "$OUT_DIR/bzImage" "$OUT_DIR/initramfs.cpio.gz"
@@ -170,6 +179,14 @@ cp "$ROOT_DIR/config/linux-x86_64.config" "$LINUX_BUILD/.config"
 
 printf 'Building Linux %s\n' "$LINUX_VERSION"
 make -C "$LINUX_SOURCE" O="$LINUX_BUILD" ARCH=x86 olddefconfig
+for expected_setting in CONFIG_SIGNALFD=y CONFIG_ACPI=y; do
+    if ! grep --fixed-strings --line-regexp --quiet "$expected_setting" \
+        "$LINUX_BUILD/.config"; then
+        printf 'error: required Steward kernel setting is missing: %s\n' \
+            "$expected_setting" >&2
+        exit 1
+    fi
+done
 make -C "$LINUX_SOURCE" O="$LINUX_BUILD" ARCH=x86 --jobs="$JOBS" bzImage
 cp "$LINUX_BUILD/arch/x86/boot/bzImage" "$OUT_DIR/bzImage"
 
@@ -382,11 +399,27 @@ if ! "$NANO_BUILD/src/nano" --version \
     exit 1
 fi
 
+printf 'Extracting Steward %s\n' "$STEWARD_COMMIT"
+tar --extract --file "$SOURCES_DIR/$STEWARD_ARCHIVE" --directory "$WORK_DIR"
+
+printf 'Building Steward %s\n' "$STEWARD_COMMIT"
+make -C "$STEWARD_SOURCE" --jobs="$JOBS" \
+    BUILD_DIR="$STEWARD_BUILD" CXX=g++ static
+strip --strip-all "$STEWARD_BUILD/steward-static"
+
+if readelf --program-headers "$STEWARD_BUILD/steward-static" \
+    | grep --quiet INTERP; then
+    printf 'error: Steward is dynamically linked\n' >&2
+    exit 1
+fi
+
 printf 'Staging native Solven root filesystem\n'
 mkdir -p "$ROOTFS_STAGE"
 cp -a "$ROOT_DIR/rootfs/." "$ROOTFS_STAGE/"
 mkdir -p \
     "$ROOTFS_STAGE/System/Core/BusyBox" \
+    "$ROOTFS_STAGE/System/Core/Steward" \
+    "$ROOTFS_STAGE/System/Services" \
     "$ROOTFS_STAGE/System/Store" \
     "$ROOTFS_STAGE/System/Commands" \
     "$ROOTFS_STAGE/System/Trust/CA" \
@@ -433,6 +466,8 @@ mkdir -p \
     "$ROOTFS_STAGE/etc"
 
 cp "$BUSYBOX_BUILD/busybox" "$ROOTFS_STAGE/System/Core/BusyBox/busybox"
+cp "$STEWARD_BUILD/steward-static" \
+    "$ROOTFS_STAGE/System/Core/Steward/steward"
 while IFS= read -r applet; do
     ln -s ../Core/BusyBox/busybox "$ROOTFS_STAGE/System/Commands/$applet"
 done < <("$BUSYBOX_BUILD/busybox" --list)
@@ -451,16 +486,20 @@ cp "$ROOT_DIR/config/volumes.conf" "$ROOTFS_STAGE/State/System/Volumes/registry"
 ln -s ../../Programs/CLI/Curl/Executable/curl "$ROOTFS_STAGE/System/Commands/curl"
 ln -s ../../Programs/CLI/Nano/Executable/nano "$ROOTFS_STAGE/System/Commands/nano"
 ln -s ../Core/Path/solpath "$ROOTFS_STAGE/System/Commands/solpath"
+ln -s ../Core/Steward/steward "$ROOTFS_STAGE/System/Commands/steward"
 ln -s ../Runtime/System/Network/resolv.conf "$ROOTFS_STAGE/etc/resolv.conf"
 
 chmod 0755 \
     "$ROOTFS_STAGE/System/Core/BusyBox/busybox" \
-    "$ROOTFS_STAGE/System/Core/Init/init" \
+    "$ROOTFS_STAGE/System/Core/Console/start" \
+    "$ROOTFS_STAGE/System/Core/Network/start" \
     "$ROOTFS_STAGE/System/Core/Network/udhcpc.script" \
     "$ROOTFS_STAGE/System/Core/Path/solpath" \
+    "$ROOTFS_STAGE/System/Core/Steward/steward" \
     "$ROOTFS_STAGE/Programs/CLI/Curl/Executable/curl" \
     "$ROOTFS_STAGE/Programs/CLI/Nano/Executable/nano"
 chmod 0644 "$ROOTFS_STAGE/System/Core/Shell/interactive.sh"
+chmod 0644 "$ROOTFS_STAGE/System/Services/"*.service
 chmod 1777 "$ROOTFS_STAGE/Runtime/Temp"
 
 for forbidden_path in bin sbin usr lib var home run tmp; do

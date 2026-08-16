@@ -5,13 +5,13 @@
 Solven is an independent desktop operating system built around the Linux
 kernel. This repository currently boots Linux 6.12.103-solven in QEMU, finds a
 persistent ext4 system volume by UUID, switches from a minimal initramfs into a
-Solven-native root filesystem, configures VirtIO networking, and opens an
-interactive root shell.
+Solven-native root filesystem, and launches Steward as the real-root PID 1.
+Steward starts networking and supervises the interactive console.
 
 The bootstrap includes static BusyBox, curl with certificate-validated HTTPS,
-GNU nano, command history, shell line editing, and the initial Solven volume
-and path model. It intentionally does not include a bootloader, installer,
-package manager, service manager, SSH server, Wi-Fi stack, or desktop.
+GNU nano, Steward service management, command history, shell line editing, and
+the initial Solven volume and path model. It intentionally does not include a
+bootloader, installer, package manager, SSH server, Wi-Fi stack, or desktop.
 
 ## Pinned upstream sources
 
@@ -24,6 +24,7 @@ package manager, service manager, SSH server, Wi-Fi stack, or desktop.
 | Mozilla CA extract | 2026-07-16 | `https://curl.se/docs/caextract.html` |
 | ncurses | 6.6 | `https://ftp.gnu.org/gnu/ncurses/` |
 | GNU nano | 9.2 | `https://ftp.gnu.org/gnu/nano/` |
+| Steward | `ecb20b2415f47aed7c204cb375aa8c962db26e2d` | `https://github.com/Solven-OS/steward` |
 
 `build.sh` verifies every downloaded artifact against a pinned SHA-256 checksum
 before extracting, building, or staging it.
@@ -37,13 +38,14 @@ before extracting, building, or staging it.
 | CA bundle | `3ff344e30b9b1ed2971044eabb438a08f2e2245ddb5f8ab1a3ad8b63ab4eaf91` |
 | ncurses | `355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11` |
 | GNU nano | `05ecb99247b782e8a5b3a25ed4101dd034b0236902f7449bc9795b717642f7e9` |
+| Steward | `32085f86813dc4fc3564c92a1681e8fcec89d3a48211d45651136cb44ffc9567` |
 
 ## Host requirements
 
 The bootstrap supports an x86_64 Linux build host and target. It requires:
 
 - Bash
-- GNU make and a native C toolchain with static libc support
+- GNU make and native C and C++23 toolchains with static libc and libstdc++ support
 - `bc`, `bison`, `flex`, and Perl for the Linux build
 - GNU coreutils, `tar`, `xz`, and `bzip2`
 - `cpio`, `gzip`, `find`, and `sort` for the initramfs
@@ -75,8 +77,8 @@ out/solven-root.ext4
 `solven-root.ext4` is a 128 MiB persistent VirtIO block image. `build.sh`
 atomically replaces it after a successful rebuild; repeated `run.sh`
 invocations do not. QEMU uses the current terminal as the serial console. Run
-`sync` before pressing `Ctrl-a`, then `x`, because that QEMU shortcut is an
-abrupt exit rather than a guest shutdown.
+`steward shutdown` for an orderly poweroff. The `Ctrl-a`, then `x` QEMU shortcut
+is an emergency exit and does not cleanly unmount the guest filesystem.
 
 The boot sequence is:
 
@@ -86,13 +88,16 @@ Linux kernel
   -> locate the A: volume by ext4 UUID
   -> mount the real root
   -> switch_root
-  -> /System/Core/Init/init
-  -> interactive shell
+  -> /System/Core/Steward/steward (PID 1)
+  -> network.service
+  -> console.service
+  -> supervised interactive shell
 ```
 
 The initramfs contains only a dedicated minimal BusyBox, the volume registry,
-mount points, and `/init`. Normal BusyBox, networking, trust data, curl, nano,
-and shell configuration live only on the persistent root.
+mount points, and `/init`. Steward, normal BusyBox, service definitions,
+networking, trust data, curl, nano, and shell configuration live only on the
+persistent root.
 
 ## Native filesystem
 
@@ -170,6 +175,8 @@ curl and nano are program-owned bundles:
 Both executables are static. Their linked libraries are therefore incorporated
 into their executable rather than installed into a global library directory.
 `/System/Commands/curl` and `/System/Commands/nano` expose them to the shell.
+Steward is a Solven core component at `/System/Core/Steward/steward` and is
+exposed as `/System/Commands/steward`.
 
 The shipped CA foundation is
 `/System/Trust/CA/ca-certificates.crt`. curl is compiled to use that native path
@@ -252,6 +259,44 @@ nano /Users/root/test.txt
 Direct `A:/...` handling in Solven-native APIs and external programs is a later
 milestone.
 
+## Steward
+
+[Steward](https://github.com/Solven-OS/steward) is Solven's native PID 1 and
+service manager. Bootstrap fetches its exact pinned Git revision, verifies the
+source archive checksum, builds it as a static C++23 executable, and rejects a
+binary with a `PT_INTERP` dynamic-loader dependency.
+
+Native service definitions live at `/System/Services/*.service`. The initial
+services are:
+
+```text
+network.service  oneshot, nonfatal
+console.service  simple, ordered after networking, always restarted
+```
+
+`After` defines startup order only. A failed network oneshot is recorded but
+does not prevent the console from starting. Exiting the interactive shell causes
+Steward to start a fresh console after its configured restart delay.
+
+Steward uses `signalfd` and `poll` as PID 1, reaps children, distinguishes
+`exec` failure from successful process creation, tracks service state, and
+stops service process groups in reverse startup order. It exposes a root-only
+Unix control socket at `/Runtime/System/Steward/control.sock`:
+
+```sh
+steward status
+steward shutdown
+steward reboot
+```
+
+The supplied `run.sh` uses QEMU's `-no-reboot` option, so `steward reboot`
+exits that QEMU invocation after reaching the kernel restart path. Remove that
+runner option when observing a complete reboot cycle during development.
+
+Fatal service parsing, dependency, or ordering errors enter a supervised rescue
+console instead of terminating PID 1. Socket activation, timers, cgroups,
+containers, login management, and a logging daemon are outside this milestone.
+
 ## Shell and nano
 
 BusyBox command editing, persistent history, tab completion, fancy prompt
@@ -274,7 +319,7 @@ behavior remain available.
 
 ## Persistence
 
-Create files on the real root, exit QEMU, and run `./run.sh` again without
+Create files on the real root, shut down, and run `./run.sh` again without
 running `./build.sh`:
 
 ```sh
@@ -282,6 +327,7 @@ cd A:/Users/root
 echo "Solven lives" > persistence-test
 nano /Users/root/test.txt
 sync
+steward shutdown
 ```
 
 After restarting QEMU:
@@ -296,11 +342,11 @@ Running `./build.sh` intentionally creates a fresh root volume.
 ## Networking
 
 QEMU provides a VirtIO network device connected to its unprivileged user-mode
-network. The real-root init enables loopback and BusyBox `udhcpc` requests an
-IPv4 lease for `eth0`. Its native hook at
+network. Steward starts `network.service`, whose helper enables loopback and
+uses BusyBox `udhcpc` to request an IPv4 lease for `eth0`. Its native hook at
 `/System/Core/Network/udhcpc.script` configures the address, default route, and
-ephemeral resolver state. Networking failure is non-fatal and the shell always
-starts.
+ephemeral resolver state. Networking failure is non-fatal and
+`console.service` still starts.
 
 QEMU normally assigns `10.0.2.15`, with gateway `10.0.2.2` and DNS server
 `10.0.2.3`. Check the live configuration with:

@@ -1,0 +1,6 @@
+#!/System/Commands/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+printf '\nWelcome to Solven\n\n'
+cd /
+exec /System/Commands/cttyhack /System/Commands/sh -i

@@ -1,0 +1,9 @@
+[Unit]
+Description=Interactive Solven console
+After=network.service
+
+[Service]
+Type=simple
+Exec=/System/Core/Console/start
+Restart=always
+RestartSec=1000

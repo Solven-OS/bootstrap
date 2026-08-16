@@ -1,0 +1,8 @@
+[Unit]
+Description=Ethernet networking
+
+[Service]
+Type=oneshot
+Exec=/System/Core/Network/start
+Restart=never
+RestartSec=1000

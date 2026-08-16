@@ -57,4 +57,4 @@ mount -o move /dev /newroot/dev
 mount -o move /proc /newroot/proc
 mount -o move /sys /newroot/sys
 
-exec switch_root /newroot /System/Core/Init/init
+exec switch_root /newroot /System/Core/Steward/steward

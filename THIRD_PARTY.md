@@ -14,9 +14,10 @@ listed below.
 | Mozilla CA certificate data | 2026-07-16 extract | MPL-2.0 | <https://curl.se/docs/caextract.html> |
 | ncurses | 6.6 | MIT-style ncurses license | <https://invisible-island.net/ncurses/> |
 | GNU nano | 9.2 | GPL-3.0-or-later | <https://www.nano-editor.org/> |
+| Steward | `ecb20b2415f47aed7c204cb375aa8c962db26e2d` | GPL-2.0-or-later | <https://github.com/Solven-OS/steward> |
 
 The complete license notices and source files for Linux, BusyBox, curl, Mbed
-TLS, ncurses, and GNU nano are included in their upstream archives, which
+TLS, ncurses, GNU nano, and Steward are included in their upstream archives, which
 `build.sh` downloads from pinned URLs and verifies before use. The generated CA
 bundle contains its Mozilla source and licensing notice. See each upstream
 distribution for the complete applicable terms and notices.
