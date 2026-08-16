@@ -24,7 +24,7 @@ bootloader, installer, package manager, SSH server, Wi-Fi stack, or desktop.
 | Mozilla CA extract | 2026-07-16 | `https://curl.se/docs/caextract.html` |
 | ncurses | 6.6 | `https://ftp.gnu.org/gnu/ncurses/` |
 | GNU nano | 9.2 | `https://ftp.gnu.org/gnu/nano/` |
-| Steward | `ecb20b2415f47aed7c204cb375aa8c962db26e2d` | `https://github.com/Solven-OS/steward` |
+| Steward | `1c74dc3794f189b1fd6a3911f2ffc980275e11f3` | `https://github.com/Solven-OS/steward` |
 
 `build.sh` verifies every downloaded artifact against a pinned SHA-256 checksum
 before extracting, building, or staging it.
@@ -38,7 +38,7 @@ before extracting, building, or staging it.
 | CA bundle | `3ff344e30b9b1ed2971044eabb438a08f2e2245ddb5f8ab1a3ad8b63ab4eaf91` |
 | ncurses | `355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11` |
 | GNU nano | `05ecb99247b782e8a5b3a25ed4101dd034b0236902f7449bc9795b717642f7e9` |
-| Steward | `32085f86813dc4fc3564c92a1681e8fcec89d3a48211d45651136cb44ffc9567` |
+| Steward | `2aac6d65959b193700e23056e5a00d4e3595e2712ed2853d03786fbd69fdf112` |
 
 ## Host requirements
 
