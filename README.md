@@ -12,6 +12,8 @@ The bootstrap includes static BusyBox, curl with certificate-validated HTTPS,
 GNU nano, Steward service management, command history, shell line editing, and
 the initial Solven volume and path model. It intentionally does not include a
 bootloader, installer, package manager, SSH server, Wi-Fi stack, or desktop.
+Long-form architecture and design rationale live in the
+[Solven documentation](https://github.com/Solven-OS/docs).
 
 ## Pinned upstream sources
 
@@ -24,7 +26,7 @@ bootloader, installer, package manager, SSH server, Wi-Fi stack, or desktop.
 | Mozilla CA extract | 2026-07-16 | `https://curl.se/docs/caextract.html` |
 | ncurses | 6.6 | `https://ftp.gnu.org/gnu/ncurses/` |
 | GNU nano | 9.2 | `https://ftp.gnu.org/gnu/nano/` |
-| Steward | `1c74dc3794f189b1fd6a3911f2ffc980275e11f3` | `https://github.com/Solven-OS/steward` |
+| Steward | `a72c60ac34ee5c6bac89114541a4c84ceb3cb311` | `https://github.com/Solven-OS/steward` |
 
 `build.sh` verifies every downloaded artifact against a pinned SHA-256 checksum
 before extracting, building, or staging it.
@@ -38,7 +40,7 @@ before extracting, building, or staging it.
 | CA bundle | `3ff344e30b9b1ed2971044eabb438a08f2e2245ddb5f8ab1a3ad8b63ab4eaf91` |
 | ncurses | `355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11` |
 | GNU nano | `05ecb99247b782e8a5b3a25ed4101dd034b0236902f7449bc9795b717642f7e9` |
-| Steward | `2aac6d65959b193700e23056e5a00d4e3595e2712ed2853d03786fbd69fdf112` |
+| Steward | `1fa2f108a8af2c165ead9ed416a6d7a8e268d1d5d5efe82c92d979c527c71425` |
 
 ## Host requirements
 
@@ -281,7 +283,7 @@ Steward to start a fresh console after its configured restart delay.
 Steward uses `signalfd` and `poll` as PID 1, reaps children, distinguishes
 `exec` failure from successful process creation, tracks service state, and
 stops service process groups in reverse startup order. It exposes a root-only
-Unix control socket at `/Runtime/System/Steward/control.sock`:
+Unix control socket at `/Runtime/System/Steward/control.socket`:
 
 ```sh
 steward status
